@@ -3,8 +3,34 @@ uuid = "4b48e6e7-310e-4c37-88f1-40fb96fd3041"
 authors = ["murrellb <murrellb@gmail.com> and contributors"]
 version = "1.0.0-DEV"
 
+[deps]
+BatchedTransformations = "8ba27c4b-52b5-4b10-bc66-a4fda05aa11b"
+DLProteinFormats = "df93d313-1126-4eb6-ac29-b325d5898587"
+Flowfusion = "5b4e93c8-7b6e-4682-b400-fc3b238f52b1"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+ForwardBackward = "e879419d-bb0f-4252-adee-d266c51ac92d"
+InvariantPointAttention = "814a5788-1061-474f-a71f-873f087d5d12"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Onion = "fdebf6c2-71da-43a1-b539-c3bc3e09c5c6"
+ProteinChains = "b8e8f2a5-48d3-44f1-ba0d-c71cb7726ff8"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+RandomFeatureMaps = "780baa95-dd42-481b-93db-80fe3d88832c"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+
 [compat]
-julia = "1.10"
+BatchedTransformations = "0.5.7"
+DLProteinFormats = "0.1.0"
+Flowfusion = "0.1.1"
+Flux = "0.16.3"
+ForwardBackward = "0.1.0"
+InvariantPointAttention = "0.1.3"
+LinearAlgebra = "1"
+Onion = "0.1.0"
+ProteinChains = "0.7.2"
+Random = "1"
+RandomFeatureMaps = "0.2.2"
+StatsBase = "0.34.5"
+julia = "1.9"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
