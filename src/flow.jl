@@ -31,8 +31,8 @@ function training_sample(b)
 end
 
 function losses(hatframes, aalogits, ts)
-    rotangent = Flowfusion.so3_tangent_coordinates_stack(hatframes.composed.inner.values, tensor(ts.Xt[2]))
-    hatloc, hatrot, hataas = (hatframes.composed.outer.values, rotangent, aalogits)
+    rotangent = Flowfusion.so3_tangent_coordinates_stack(values(linear(hatframes)), tensor(ts.Xt[2]))
+    hatloc, hatrot, hataas = (values(translation(hatframes)), rotangent, aalogits)
     l_loc = floss(P[1], hatloc, ts.X1[1], scalefloss(P[1], ts.t, 2, 0.2f0)) / 2
     l_rot = floss(P[2], hatrot, ts.rotξ, scalefloss(P[2], ts.t, 2, 0.2f0)) / 10
     l_aas = floss(P[3], hataas, ts.X1[3], scalefloss(P[3], ts.t, 1, 0.2f0)) / 100
@@ -45,7 +45,7 @@ function flowX1predictor(X0, b, model; d = identity)
     function m(t, Xt)
         print(".")
         f, aalogits = model(d(t .+ zeros(Float32, 1, batch_dim)), d(Xt), d(b.chainids), d(b.resinds), sc_frames = f)
-        return cpu(f.composed.outer.values), ManifoldState(rotM, eachslice(cpu(f.composed.inner.values), dims=(3,4))), cpu(softmax(aalogits))
+        return cpu(values(translation(f))), ManifoldState(rotM, eachslice(cpu(values(linear(f))), dims=(3,4))), cpu(softmax(aalogits))
     end
     return m
 end
