@@ -20,7 +20,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 [compat]
 BatchedTransformations = "0.5.7"
 DLProteinFormats = "0.1.0"
-Flowfusion = "0.1.1"
+Flowfusion = "0.1.1, 0.1"
 Flux = "0.16.3"
 ForwardBackward = "0.1.0"
 InvariantPointAttention = "0.1.3"
