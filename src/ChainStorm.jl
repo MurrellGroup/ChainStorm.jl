@@ -53,7 +53,7 @@ Returns the same batch, but with residue indices for the selected chains replace
 b = dummy_batch([15,60])
 wrapped_b = circularize(b, 1)
 g = flow_quickgen(wrapped_b, model)
-export_pdb("$(id).pdb", g, b.chainids, b.resinds) #<- Note: original resinds are used
+export_pdb("test.pdb", g, b.chainids, b.resinds) #<- Note: original resinds are used
 ```
 """
 function circularize(batch, circular_chain_ids::AbstractVector)
@@ -66,7 +66,7 @@ function circularize(batch, circular_chain_ids::AbstractVector)
 end
 circularize(batch, circular_chain_ids::Integer) = circularize(batch, [circular_chain_ids])
 
-export training_sample, P, FlowcoderSC, losses, flow_quickgen, export_pdb, gen2prot, dummy_batch, first_trajectory
+export training_sample, P, FlowcoderSC, losses, flow_quickgen, export_pdb, gen2prot, dummy_batch, first_trajectory, circularize
 
 
 end
