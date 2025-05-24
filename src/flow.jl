@@ -50,6 +50,17 @@ function flowX1predictor(X0, b, model; d = identity)
     return m
 end
 
+function flowX1predictor(X0, b, model::FlowcoderAASC; d = identity)
+    batch_dim = size(tensor(X0[1]), 4)
+    f, aalogits = model(d(zeros(Float32, 1, batch_dim)), d(X0), d(b.chainids), d(b.resinds))
+    function m(t, Xt)
+        print(".")
+        f, aalogits = model(d(t .+ zeros(Float32, 1, batch_dim)), d(Xt), d(b.chainids), d(b.resinds), sc_frames = f, sc_aa = aalogits)
+        return cpu(values(translation(f))), ManifoldState(rotM, eachslice(cpu(values(linear(f))), dims=(3,4))), cpu(softmax(aalogits))
+    end
+    return m
+end
+
 H(a; d = 2/3) = a<=d ? (a^2)/2 : d*(a - d/2)
 S(a) = H(a)/H(1)
 
