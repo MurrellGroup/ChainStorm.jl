@@ -102,11 +102,11 @@ end
 
 
 
-struct ChainStorm{L}
+struct ChainStormV1{L}
     layers::L
 end
-Flux.@layer ChainStorm
-function ChainStorm(dim, depth, f_depth)
+Flux.@layer ChainStormV1
+function ChainStormV1(dim, depth, f_depth)
     layers = (;
         depth = depth,
         f_depth = f_depth,
@@ -124,11 +124,11 @@ function ChainStorm(dim, depth, f_depth)
         selfcond_selfipa = [CrossFrameIPA(dim, IPA(IPA_settings(dim, c_z = 32)), ln = AdaLN(dim, dim)) for _ in 1:depth],
         selfcond_AAencoder = StarGLU(Dense(21 => 2dim, bias=false), Dense(2dim => dim, bias=false), Dense(21 => 2dim, bias=false), swish), #<- SwiGLU, but with different input and output dims
         #New Transformer Blocks:
-        transformers = [AdaTransformerBlock(dim, dim, 8) for _ in 1:depth]
+        transformers = [Onion.AdaTransformerBlock(dim, dim, 8) for _ in 1:depth]
     )
-    return ChainStorm(layers)
+    return ChainStormV1(layers)
 end
-function (fc::ChainStorm)(t, Xt, chainids, resinds; sc_frames = nothing, sc_aa = nothing)
+function (fc::ChainStormV1)(t, Xt, chainids, resinds; sc_frames = nothing, sc_aa = nothing)
     l = fc.layers
     pmask = Flux.Zygote.@ignore self_att_padding_mask(Xt[1].lmask)
     pre_z = Flux.Zygote.@ignore l.pair_rff(pair_encode(resinds, chainids))
