@@ -1,12 +1,21 @@
 module ChainStorm
 
-using Flowfusion, ForwardBackward, Flux, RandomFeatureMaps, Onion, InvariantPointAttention, BatchedTransformations, ProteinChains, DLProteinFormats
+using Flowfusion, ForwardBackward, Flux, RandomFeatureMaps, Onion, InvariantPointAttention, BatchedTransformations, ProteinChains, DLProteinFormats, HuggingFaceApi, JLD2
 
 include("flow.jl")
 include("model.jl")
 
+function load_model(; checkpoint = "ChainStormV1.jld2")
+    file = hf_hub_download("MurrellLab/ChainStorm", checkpoint)
+    return Flux.loadmodel!(ChainStormV1(), JLD2.load(file, "model_state"))
+end
+
 chainids_from_lengths(lengths) = vcat([repeat([i],l) for (i,l) in enumerate(lengths)]...)
-gen2prot(samp, chainids, resnums; name = "Gen") = ProteinStructure(name, Atom{eltype(tensor(samp[1]))}[], DLProteinFormats.unflatten(tensor(samp[1]), tensor(samp[2]), tensor(samp[3]), clamp.(chainids, 0, 9), resnums)[1])
+function gen2prot(samp, chainids, resnums; name = "Gen", )
+    d = Dict(zip(0:25,'A':'Z'))
+    chain_letters = get.((d,), chainids, 'Z')
+    ProteinStructure(name, Atom{eltype(tensor(samp[1]))}[], DLProteinFormats.unflatten(tensor(samp[1]), tensor(samp[2]), tensor(samp[3]), chain_letters, resnums)[1])
+ end
 export_pdb(path, samp, chainids, resnums) = ProteinChains.writepdb(path, gen2prot(samp, chainids, resnums))
 
 function first_trajectory(paths)
@@ -66,7 +75,7 @@ function circularize(batch, circular_chain_ids::AbstractVector)
 end
 circularize(batch, circular_chain_ids::Integer) = circularize(batch, [circular_chain_ids])
 
-export training_sample, P, FlowcoderSC, losses, flow_quickgen, export_pdb, gen2prot, dummy_batch, first_trajectory, circularize
+export training_sample, P, ChainStormV1, losses, flow_quickgen, export_pdb, gen2prot, dummy_batch, first_trajectory, circularize, load_model
 
 
 end

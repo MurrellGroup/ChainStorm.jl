@@ -1,8 +1,11 @@
-struct FlowcoderSC{L}
+ipa(l, f, x, pf, c, m) = l(f, x, pair_feats = pf, cond = c, mask = m)
+crossipa(l, f1, f2, x, pf, c, m) = l(f1, f2, x, pair_feats = pf, cond = c, mask = m)
+
+struct ChainStormV1{L}
     layers::L
 end
-Flux.@layer FlowcoderSC
-function FlowcoderSC(dim, depth, f_depth)
+Flux.@layer ChainStormV1
+function ChainStormV1(dim::Int = 384, depth::Int = 6, f_depth::Int = 6)
     layers = (;
         depth = depth,
         f_depth = f_depth,
@@ -18,11 +21,9 @@ function FlowcoderSC(dim, depth, f_depth)
         framemovers = [Framemover(dim) for _ in 1:f_depth],
         AAdecoder = Chain(StarGLU(dim, 3dim), Dense(dim => 21, bias=false)),
     )
-    return FlowcoderSC(layers)
+    return ChainStormV1(layers)
 end
-ipa(l, f, x, pf, c, m) = l(f, x, pair_feats = pf, cond = c, mask = m)
-crossipa(l, f1, f2, x, pf, c, m) = l(f1, f2, x, pair_feats = pf, cond = c, mask = m)
-function (fc::FlowcoderSC)(t, Xt, chainids, resinds; sc_frames = nothing)
+function (fc::ChainStormV1)(t, Xt, chainids, resinds; sc_frames = nothing)
     l = fc.layers
     pmask = Flux.Zygote.@ignore self_att_padding_mask(Xt[1].lmask)
     pre_z = Flux.Zygote.@ignore l.pair_rff(pair_encode(resinds, chainids))

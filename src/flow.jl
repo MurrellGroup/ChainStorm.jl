@@ -1,7 +1,7 @@
 const rotM = Flowfusion.Rotations(3)
 
 schedule_f(t) = 1-(1-t)^2
-const P = (FProcess(BrownianMotion(0.2f0), schedule_f), FProcess(ManifoldProcess(0.2f0), schedule_f), NoisyInterpolatingDiscreteFlow(0.2f0, 2))
+const P = (FProcess(BrownianMotion(0.2f0), schedule_f), FProcess(ManifoldProcess(0.2f0), schedule_f), NoisyInterpolatingDiscreteFlow(0.2f0, K = 2, dummy_token = 21))
 
 function compound_state(b)
     L,B = size(b.aas)
