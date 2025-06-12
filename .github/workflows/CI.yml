@@ -62,6 +62,7 @@ jobs:
         shell: julia --project=docs --color=yes {0}
         run: |
           using Pkg
+          Pkg.Registry.add(url="https://github.com/JuliaRegistries/General")
           Pkg.Registry.add(url="https://github.com/MurrellGroup/MurrellGroupRegistry")
           Pkg.develop(PackageSpec(path=pwd()))
           Pkg.instantiate()
