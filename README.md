@@ -35,6 +35,12 @@ g = flow_quickgen(b, model) #<- Model inference call
 export_pdb("gen.pdb", g, b.chainids, b.resinds) #<- Save PDB
 ```
 
+Or try is in a minimal Colab notebook:
+
+<a href="https://colab.research.google.com/github/MurrellGroup/ChainStorm.jl/blob/main/src/extras/ChainStormColab.ipynb">
+  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+</a>
+
 ## Visualization, and using the GPU
 
 ```julia
