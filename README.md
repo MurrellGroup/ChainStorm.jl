@@ -12,7 +12,7 @@ This repo implements a structure/sequence co-design model, using diffusion/flow 
 
 ## New to Julia?
 
-Go ![here](https://julialang.org/install/) for instructions on how to install Julia (use `juliaup`), and you can run the code snippets below directly in ![the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/).
+Go [here](https://julialang.org/install/) for instructions on how to install Julia (use `juliaup`), and you can run the code snippets below directly in [the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/).
 
 ## ChainStorm installation
 
