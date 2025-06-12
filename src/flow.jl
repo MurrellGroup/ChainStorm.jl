@@ -39,12 +39,16 @@ function losses(hatframes, aalogits, ts)
     return l_loc, l_rot, l_aas
 end
 
-function flowX1predictor(X0, b, model; d = identity)
+function flowX1predictor(X0, b, model; d = identity, smooth = 0)
     batch_dim = size(tensor(X0[1]), 4)
     f, _ = model(d(zeros(Float32, 1, batch_dim)), d(X0), d(b.chainids), d(b.resinds))
+    prev_trans = values(translation(f))
+    T = eltype(prev_trans)
     function m(t, Xt)
         print(".")
         f, aalogits = model(d(t .+ zeros(Float32, 1, batch_dim)), d(Xt), d(b.chainids), d(b.resinds), sc_frames = f)
+        values(translation(f)) .= prev_trans .* T(smooth) .+ values(translation(f)) .* T(1-smooth)
+        prev_trans = values(translation(f))
         return cpu(values(translation(f))), ManifoldState(rotM, eachslice(cpu(values(linear(f))), dims=(3,4))), cpu(softmax(aalogits))
     end
     return m
@@ -53,7 +57,7 @@ end
 H(a; d = 2/3) = a<=d ? (a^2)/2 : d*(a - d/2)
 S(a) = H(a)/H(1)
 
-function flow_quickgen(b, model; steps = :default, d = identity, tracker = Returns(nothing))
+function flow_quickgen(b, model; steps = :default, d = identity, tracker = Returns(nothing), smooth = 0.6)
     stps = vcat(zeros(5),S.([0.0:0.00255:0.9975;]),[0.999, 0.9998, 1.0])
     if steps isa Number
         stps = 0f0:1f0/steps:1f0
@@ -61,6 +65,6 @@ function flow_quickgen(b, model; steps = :default, d = identity, tracker = Retur
         stps = steps
     end
     X0 = zero_state(b)
-    X1pred = flowX1predictor(X0, b, model, d = d)
+    X1pred = flowX1predictor(X0, b, model, d = d, smooth = smooth)
     return gen(P, X0, X1pred, Float32.(stps), tracker = tracker)
 end
