@@ -50,6 +50,18 @@ function flowX1predictor(X0, b, model; d = identity)
     return m
 end
 
+function flowX1predictor(X0, b, model::ChainStormDesign; d = identity, pair_cond = nothing)
+    batch_dim = size(tensor(X0[1]), 4)
+    pair_cond = d(pair_cond)
+    f, _ = model(d(zeros(Float32, 1, batch_dim)), d(X0), d(b.chainids), d(b.resinds), pair_conditioning = pair_cond)
+    function m(t, Xt)
+        print(".")
+        f, aalogits = model(d(t .+ zeros(Float32, 1, batch_dim)), d(Xt), d(b.chainids), d(b.resinds), sc_frames = f, pair_conditioning = pair_cond)
+        return cpu(values(translation(f))), ManifoldState(rotM, eachslice(cpu(values(linear(f))), dims=(3,4))), cpu(softmax(aalogits))
+    end
+    return m
+end
+
 H(a; d = 2/3) = a<=d ? (a^2)/2 : d*(a - d/2)
 S(a) = H(a)/H(1)
 
@@ -62,5 +74,17 @@ function flow_quickgen(b, model; steps = :default, d = identity, tracker = Retur
     end
     X0 = zero_state(b)
     X1pred = flowX1predictor(X0, b, model, d = d)
+    return gen(P, X0, X1pred, Float32.(stps), tracker = tracker)
+end
+
+function flow_quickgen(b, model::ChainStormDesign; steps = :default, d = identity, tracker = Returns(nothing), pair_cond = nothing)
+    stps = vcat(zeros(5),S.([0.0:0.00255:0.9975;]),[0.999, 0.9998, 1.0])
+    if steps isa Number
+        stps = 0f0:1f0/steps:1f0
+    elseif steps isa AbstractVector
+        stps = steps
+    end
+    X0 = zero_state(b)
+    X1pred = flowX1predictor(X0, b, model, d = d, pair_cond = pair_cond)
     return gen(P, X0, X1pred, Float32.(stps), tracker = tracker)
 end
