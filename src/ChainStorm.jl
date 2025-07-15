@@ -7,8 +7,22 @@ include("flow.jl")
 include("conditioning.jl")
 
 
+function textlog(filepath::String, l; also_print = true)
+    f = open(filepath,"a")
+        write(f, join(string.(l),", "))
+        write(f, "\n")
+    close(f)
+    if also_print
+        println(join(string.(l),", "))
+    end
+end
+
 chainids_from_lengths(lengths) = vcat([repeat([i],l) for (i,l) in enumerate(lengths)]...)
-gen2prot(samp, chainids, resnums; name = "Gen") = ProteinStructure(name, Atom{eltype(tensor(samp[1]))}[], DLProteinFormats.unflatten(tensor(samp[1]), tensor(samp[2]), tensor(samp[3]), clamp.(chainids, 0, 9), resnums)[1])
+function gen2prot(samp, chainids, resnums; name = "Gen")
+    d = Dict(zip(0:25,'A':'Z'))
+    chain_letters = get.((d,), chainids, 'Z')
+    ProteinStructure(name, Atom{eltype(tensor(samp[1]))}[], DLProteinFormats.unflatten(tensor(samp[1]), tensor(samp[2]), tensor(samp[3]), chain_letters, resnums)[1])
+ end
 export_pdb(path, samp, chainids, resnums) = ProteinChains.writepdb(path, gen2prot(samp, chainids, resnums))
 
 function first_trajectory(paths)
@@ -68,7 +82,7 @@ function circularize(batch, circular_chain_ids::AbstractVector)
 end
 circularize(batch, circular_chain_ids::Integer) = circularize(batch, [circular_chain_ids])
 
-export training_sample, P, FlowcoderSC, ChainStormDesign, losses, flow_quickgen, export_pdb, gen2prot, dummy_batch, first_trajectory, circularize, rand_conditioning_mask, random_distance_features
+export training_sample, P, FlowcoderSC, ChainStormDesign, ChainStormDesignV2, losses, flow_quickgen, export_pdb, gen2prot, dummy_batch, first_trajectory, circularize, rand_conditioning_mask, random_distance_features, textlog
 
 
 end

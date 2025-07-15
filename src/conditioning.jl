@@ -97,4 +97,29 @@ function random_distance_features(locs, m, n) #Coords, mask, noise_multiplier
     return vcat(reshape(noised_dists, 1, size(noised_dists)...), reshape(n, 1, size(n)...), reshape(m, 1, size(m)...))
 end
 
-#@time m, n = ChainStorm.rand_conditioning_mask(chainids);
+#Used for specifying distance features for design during inference
+function forced_distance_features(locs; m = ones(Bool, size(locs, 3), size(locs, 3), 1), noise_rescale = 1.0f0, n = zeros(Float32, size(locs, 3), size(locs, 3), 1)) #Coords, mask, noise_multiplier
+    l = size(locs, 3)        
+    pd = batched_pairwise_dist(locs)
+    dists = dist_transform(pd)
+    noised_dists = (dists .+ randn!(similar(dists)) .* n .* noise_rescale) .* m
+    return vcat(reshape(noised_dists, 1, size(noised_dists)...), reshape(n, 1, size(n)...), reshape(m, 1, size(m)...))
+end
+
+function merge_spec(b1, b2; inds1 = 1:size(b1.aas,1), inds2 = 1:size(b2.aas,1), enforce_different_chains = true)
+    part_chainids = b1.chainids[inds1,:], b2.chainids[inds2,:]
+    if enforce_different_chains
+        m = maximum(part_chainids[1])
+        part_chainids[2] .+= m + 1
+    end
+(; aas = vcat(b1.aas[inds1,:], b2.aas[inds2,:]),
+    chainids = vcat(part_chainids...),
+    cluster = 0,
+    locs = cat(b1.locs[:,:,inds1,:], b2.locs[:,:,inds2,:], dims = 3),
+    resinds = vcat(b1.resinds[inds1,:], b2.resinds[inds2,:]),
+    rots = cat(b1.rots[:,:,inds1,:], b2.rots[:,:,inds2,:], dims = 3),
+    padmask = vcat(part_chainids...) .< Inf
+    )
+end
+
+export forced_distance_features, merge_spec
