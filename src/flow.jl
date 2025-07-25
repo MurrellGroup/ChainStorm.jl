@@ -3,6 +3,16 @@ const rotM = Flowfusion.Rotations(3)
 schedule_f(t) = 1-(1-t)^2
 const P = (FProcess(BrownianMotion(0.2f0), schedule_f), FProcess(ManifoldProcess(0.2f0), schedule_f), NoisyInterpolatingDiscreteFlow(0.2f0, K = 2, dummy_token = 21))
 
+function reverse_process(P)
+    continuous_schedule =   t -> 1 - P[1].F(1 - t)
+    manifold_schedule =   t -> 1 - P[2].F(1 - t)
+    κ₁ =  t -> 1 - P[3].κ₁(1 - t)
+    dκ₁ = t ->     P[3].dκ₁(1 - t)
+    κ₂ =  t -> 1 - P[3].κ₂(1 - t)
+    dκ₂ = t ->     P[3].dκ₁(1 - t)
+    (Flowfusion.FProcess(P[1].P, continuous_schedule), Flowfusion.FProcess(P[2].P, manifold_schedule), Flowfusion.NoisyInterpolatingDiscreteFlow(κ₁, dκ₁, κ₂, dκ₂, P[3].mask_token))
+end
+
 function compound_state(b)
     L,B = size(b.aas)
     cmask = b.aas .< 100
@@ -45,7 +55,6 @@ function flowX1predictor(X0, b, model; d = identity, smooth = 0)
     prev_trans = values(translation(f))
     T = eltype(prev_trans)
     function m(t, Xt)
-        print(".")
         f, aalogits = model(d(t .+ zeros(Float32, 1, batch_dim)), d(Xt), d(b.chainids), d(b.resinds), sc_frames = f)
         values(translation(f)) .= prev_trans .* T(smooth) .+ values(translation(f)) .* T(1-smooth)
         prev_trans = values(translation(f))
@@ -54,17 +63,74 @@ function flowX1predictor(X0, b, model; d = identity, smooth = 0)
     return m
 end
 
+function flowX0predictor(X0, b, model, P; d = identity, smooth = 0) # Forces P to be a FProcess and doesn't work for some reason for P Deterministic
+    batch_dim = size(tensor(X0[1]), 4)
+    ff, _ = model(d(ones(Float32, 1, batch_dim)), d(X0), d(b.chainids), d(b.resinds)) # ones makes it start at time = 1
+    if P[1].P isa Deterministic
+        v = 0
+    else
+        v = P[1].P.v
+    end
+    function m(rt, Xt)
+        ff, aalogits = model(d(1-rt .+ zeros(Float32, 1, batch_dim)), d(Xt), d(b.chainids), d(b.resinds), sc_frames=ff)
+        X1Hat = deepcopy(ff)
+        t = 1f0 .- P[1].F.(rt .+ zeros(Float32, 1, batch_dim))
+        t[t .>= 0.999] .= 0.999
+        values(translation(X1Hat)) .= (tensor(Xt[1]) .- values(translation(X1Hat)) .* t) ./ (1 .- t + v .* t)
+        M = Xt[2].S.M
+        p = eachslice(tensor(Xt[2]), dims=(3, 4))
+        tangent = -t ./ (1 .- t) .* log.((M,), p, eachslice(values(linear(X1Hat)), dims=(3, 4)))
+        X0Hat = exp.((M,), p, tangent)
+        values(linear(X1Hat)) .= stack(X0Hat)
+        T = eltype(aalogits)
+        aalogits .= T(-Inf)
+        aalogits[21,:,:] .= 0
+        return (cpu(values(translation(X1Hat))), ManifoldState(rotM, eachslice(cpu(values(linear(X1Hat))), dims=(3,4))), cpu(softmax(aalogits))), (cpu(values(translation(ff))), ManifoldState(rotM, eachslice(cpu(values(linear(ff))), dims=(3,4))), cpu(softmax(aalogits)))
+    end
+    return m
+end
+
+function bind_flowX1predictor(X0, b, model, recorded; d = identity, smooth = 0)
+    batch_dim = size(tensor(X0[1]), 4)
+
+    f, _ = model(d(zeros(Float32, 1, batch_dim)), d(X0), d(b.chainids), d(b.resinds))
+    values(translation(f))[:, :, 1:size(tensor(recorded[end][3][1]), 3), :] .= tensor(recorded[end][3][1]) # Might be more sensible to do a weighted average of X̂₁ and (1-t)*(Xₜ₊Δₜ - Xₜ)/Δt
+    values(linear(f))[:, :, 1:size(tensor(recorded[end][3][2]), 3), :] .= tensor(recorded[end][3][2])
+
+    f, _ = model(d(zeros(Float32, 1, batch_dim)), d(X0), d(b.chainids), d(b.resinds), sc_frames=f)
+    values(translation(f))[:, :, 1:size(tensor(recorded[end][3][1]), 3), :] .= tensor(recorded[end][3][1])
+    values(linear(f))[:, :, 1:size(tensor(recorded[end][3][2]), 3), :] .= tensor(recorded[end][3][2])
+    function m(t, Xt)
+        f, aalogits = model(d(t .+ zeros(Float32, 1, batch_dim)), d(Xt), d(b.chainids), d(b.resinds), sc_frames = f)
+        values(translation(f))[:, :, 1:size(tensor(recorded[end][3][1]), 3), :] .= tensor(recorded[end][3][1])
+        values(linear(f))[:, :, 1:size(tensor(recorded[end][3][2]), 3), :] .= tensor(recorded[end][3][2])
+
+        return cpu(values(translation(f))), ManifoldState(rotM, eachslice(cpu(values(linear(f))), dims=(3,4))), cpu(softmax(aalogits))
+    end
+    return m
+end
+
 H(a; d = 2/3) = a<=d ? (a^2)/2 : d*(a - d/2)
 S(a) = H(a)/H(1)
 
-function flow_quickgen(b, model; steps = :default, d = identity, tracker = Returns(nothing), smooth = 0.6)
+function flow_quickgen(P, b, X0, model; is_reverse = false, steps = :default, d = identity, tracker = Returns(nothing), smooth = 0.6, record = [], progress_bar=identity)
     stps = vcat(zeros(5),S.([0.0:0.00255:0.9975;]),[0.999, 0.9998, 1.0])
-    if steps isa Number
+
+    if steps isa Number 
         stps = 0f0:1f0/steps:1f0
     elseif steps isa AbstractVector
         stps = steps
     end
-    X0 = zero_state(b)
-    X1pred = flowX1predictor(X0, b, model, d = d, smooth = smooth)
-    return gen(P, X0, X1pred, Float32.(stps), tracker = tracker)
+    b.locs .= tensor(X0[1])
+    b.aas .= convert(Matrix{Int64}, tensor(X0[3]).indices)
+    if !is_reverse && length(record) == 0
+        X1pred = flowX1predictor(X0, b, model, d = d, smooth = smooth)
+        return gen(P, X0, X1pred, Float32.(stps), tracker = tracker, progress_bar = progress_bar)
+    elseif is_reverse
+        X0pred = flowX0predictor(X0, b, model, P, d = d, smooth = smooth)
+        return reverse_gen(P, X0, X0pred, Float32.(1 .- reverse(stps)), record, tracker = tracker, progress_bar = progress_bar), record
+    else
+        X1pred = bind_flowX1predictor(X0, b, model, record, d = d, smooth = smooth)
+        return bind_gen(P, X0, X1pred, Float32.(stps), record, tracker = tracker, progress_bar = progress_bar)            
+    end
 end
