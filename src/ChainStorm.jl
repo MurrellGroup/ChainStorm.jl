@@ -10,6 +10,29 @@ function load_model(; checkpoint = "ChainStormV1.jld2")
     return Flux.loadmodel!(ChainStormV1(), JLD2.load(file, "model_state"))
 end
 
+function pdb2batch(file)
+    struc = read(file, ProteinStructure)
+    struc.cluster = 1
+    DLProteinFormats.batch_flatrecs([DLProteinFormats.flatten(struc),])
+end
+
+function lengths_from_chainids(chainids)
+    counts = Int[]  # Initialize an empty array to store counts
+    current_count = 1
+
+    for i in 2:length(chainids)
+        if chainids[i] == chainids[i - 1]
+            current_count += 1
+        else
+            push!(counts, current_count)
+            current_count = 1
+        end
+    end
+
+    push!(counts, current_count)
+    return counts
+end
+
 chainids_from_lengths(lengths) = vcat([repeat([i],l) for (i,l) in enumerate(lengths)]...)
 function gen2prot(samp, chainids, resnums; name = "Gen", )
     d = Dict(zip(0:25,'A':'Z'))
