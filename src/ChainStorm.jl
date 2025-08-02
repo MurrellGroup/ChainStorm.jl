@@ -10,10 +10,9 @@ function load_model(; checkpoint = "ChainStormV1.jld2")
     return Flux.loadmodel!(ChainStormV1(), JLD2.load(file, "model_state"))
 end
 
-function pdb2batch(file)
-    struc = read(file, ProteinStructure)
+function pdb2batch(struc::ProteinChains.ProteinStructure)
     struc.cluster = 1
-    DLProteinFormats.batch_flatrecs([DLProteinFormats.flatten(struc),])
+    return DLProteinFormats.batch_flatrecs([DLProteinFormats.flatten(struc),])
 end
 
 function lengths_from_chainids(chainids)
