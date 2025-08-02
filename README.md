@@ -112,3 +112,5 @@ for epoch in 1:100
     jldsave("model_epoch_$epoch.jld", model_state = Flux.state(cpu(model)), opt_state=cpu(opt_state))
 end
 ```
+
+The code written __will__ break the other examples.
