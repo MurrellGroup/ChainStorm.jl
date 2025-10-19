@@ -1,7 +1,18 @@
 module ChainStorm
 
-using Flowfusion, ForwardBackward, Flux, RandomFeatureMaps, Onion, InvariantPointAttention, BatchedTransformations, ProteinChains, DLProteinFormats, HuggingFaceApi, JLD2
+using Flowfusion
+using ForwardBackward
+using Flux
+using RandomFeatureMaps
+using Onion
+using InvariantPointAttention
+using BatchedTransformations
+using ProteinChains
+using DLProteinFormats
+using HuggingFaceApi
+using JLD2
 
+include("reverse.jl")
 include("flow.jl")
 include("model.jl")
 

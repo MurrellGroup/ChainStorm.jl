@@ -42,7 +42,7 @@ function zero_state(b)
     L,B = size(b.aas)
     cmask = b.aas .< 100
     X0locs = MaskedState(ContinuousState(randn(Float32, size(b.locs))), cmask, b.padmask)
-    X0rots = MaskedState(ManifoldState(rotM, reshape(Array{Float32}.(Flowfusion.rand(rotM, L*B)), L, B)), cmask, b.padmask)
+    X0rots = MaskedState(ManifoldState(rotM, reshape(Array{Float32}.(rand(rotM, L*B)), L, B)), cmask, b.padmask)
     X0aas = MaskedState(DiscreteState(21, Flux.onehotbatch(similar(b.aas) .= 21, 1:21)), cmask, b.padmask)
     return (X0locs, X0rots, X0aas)
 end
@@ -138,25 +138,33 @@ end
 H(a; d = 2/3) = a<=d ? (a^2)/2 : d*(a - d/2)
 S(a) = H(a)/H(1)
 
-function flow_quickgen(P, b, X0, model; is_reverse = false, steps = :default, d = identity, tracker = Returns(nothing), smooth = 0.6, record = [], progress_bar=identity, snap_time = 0)
-    stps = vcat(zeros(5),S.([0.0:0.00255:0.9975;]),[0.999, 0.9998, 1.0])
-
-    if steps isa Number 
-        stps = 0f0:1f0/steps:1f0
+function flow_quickgen(
+    P, b, X0, model;
+    is_reverse = false,
+    steps = :default,
+    d = identity,
+    smooth = 0,
+    record = [],
+    kws...
+)
+    steps = if steps isa Number 
+        0f0:1f0/steps:1f0
     elseif steps isa AbstractVector
-        stps = steps
+        steps
+    else
+        vcat(zeros(5),S.([0.0:0.00255:0.9975;]),[0.999, 0.9998, 1.0])
     end
     b.locs .= tensor(X0[1])
     #b.aas .= convert(Matrix{Int64}, tensor(X0[3]).indices)
     b.aas .= unhot(X0[3]).S.state
-    if !is_reverse && length(record) == 0
-        X1pred = flowX1predictor(X0, b, model, d = d, smooth = smooth)
-        return gen(P, X0, X1pred, Float32.(stps), tracker = tracker, progress_bar = progress_bar)
-    elseif is_reverse
-        X0pred = flowX0predictor(X0, b, model, P, d = d, smooth = smooth)
-        return reverse_gen(P, X0, X0pred, Float32.(1 .- reverse(stps)), record, tracker = tracker, progress_bar = progress_bar, snap_time = snap_time), record
+    if is_reverse
+        X0pred = flowX0predictor(X0, b, model, P; d, smooth)
+        return reverse_gen(reverse_process(P), X0, X0pred, Float32.(1 .- reverse(steps)), record; kws...), record
+    elseif isempty(record)
+        X1pred = flowX1predictor(X0, b, model; d, smooth)
+        return gen(P, X0, X1pred, Float32.(steps); kws...)
     else
-        X1pred = bind_flowX1predictor(X0, b, model, record, d = d, smooth = smooth)
-        return bind_gen(P, X0, X1pred, Float32.(stps), record, tracker = tracker, progress_bar = progress_bar)            
+        X1pred = bind_flowX1predictor(X0, b, model, record; d, smooth)
+        return bind_gen(P, X0, X1pred, Float32.(steps), record; kws...)
     end
 end
