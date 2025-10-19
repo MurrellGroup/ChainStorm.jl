@@ -158,13 +158,65 @@ function flow_quickgen(
     #b.aas .= convert(Matrix{Int64}, tensor(X0[3]).indices)
     b.aas .= unhot(X0[3]).S.state
     if is_reverse
+        println("Reversing")
         X0pred = flowX0predictor(X0, b, model, P; d, smooth)
-        return reverse_gen(reverse_process(P), X0, X0pred, Float32.(1 .- reverse(steps)), record; kws...), record
-    elseif isempty(record)
-        X1pred = flowX1predictor(X0, b, model; d, smooth)
-        return gen(P, X0, X1pred, Float32.(steps); kws...)
-    else
+        return record, reverse_gen(reverse_process(P), X0, X0pred, Float32.(1 .- reverse(steps)), record; kws...)
+    elseif !isnothing(record) && !isempty(record)
+        println("Binding")
         X1pred = bind_flowX1predictor(X0, b, model, record; d, smooth)
         return bind_gen(P, X0, X1pred, Float32.(steps), record; kws...)
+    else
+        println("Generating")
+        X1pred = flowX1predictor(X0, b, model; d, smooth)
+        return gen(P, X0, X1pred, Float32.(steps); kws...)
     end
+end
+
+using Flowfusion: lastsize
+
+function extend(X₀ᵢ, batch, new_lengths)
+    isnothing(new_lengths) && return X₀ᵢ, batch
+    new_batch = dummy_batch([lengths_from_chainids(batch.chainids); new_lengths])
+    new_batch.resinds .= [batch.resinds; [1:l for l in new_lengths]...]
+    new_X₀ᵢ = zero_state(new_batch)
+    s = sum(new_lengths)
+    tensor(new_X₀ᵢ[1])[:, :, 1:end-s, :] .= tensor(X₀ᵢ[1])
+    tensor(new_X₀ᵢ[2])[:, :, 1:end-s, :] .= tensor(X₀ᵢ[2])
+    tensor(new_X₀ᵢ[3]).indices[1:end-s, :] .= tensor(X₀ᵢ[3]).indices
+    return new_X₀ᵢ, new_batch
+end
+
+function flex_quickgen(
+    P, batch, X₀, model;
+    step_size = 0.005f0,
+    phases = [0.0, 1.0],
+    new_lengths = [nothing, nothing],#fill(nothing, length(phases)-1),
+    use_record = [false, false],#fill(false, length(phases)-1),
+    trackers = [Tracker() for _ in 1:length(phases)-1],
+    kws...
+)
+    X₀ᵢ = X₀
+    output = []
+    local record
+    for i in 1:length(phases)-1
+        start, stop = phases[i:i+1]
+        is_reverse = start > stop
+        a, b = min(start, stop), max(start, stop)
+        steps = range(Float32(a), Float32(b), step=step_size)
+        X₀ᵢ, batch = extend(X₀ᵢ, batch, new_lengths[i])
+        if is_reverse
+            record, X₁ᵢ = flow_quickgen(
+                P, batch, X₀ᵢ, model;
+                is_reverse, steps,
+                tracker=trackers[i], kws...)
+        else
+            X₁ᵢ = flow_quickgen(
+                P, batch, X₀ᵢ, model;
+                record = [], steps,
+                tracker=trackers[i], kws...)
+        end
+        push!(output, (X₁ᵢ, batch, trackers[i]))
+        X₀ᵢ = X₁ᵢ
+    end
+    return output
 end
