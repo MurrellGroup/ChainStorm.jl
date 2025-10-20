@@ -21,7 +21,7 @@ phases = [
     Phase(0.75 => 1.0, use_record=true),
 ]
 
-out = flex_quickgen(P, batch_target, X0, model; d=gpu);
+out = flex_quickgen(P, batch_target, X0, model; phases, d=gpu);
 
 dir = "movie"
 isdir(dir) || mkdir(dir)
