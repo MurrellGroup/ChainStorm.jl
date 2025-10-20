@@ -3,29 +3,34 @@ Pkg.activate("reversal", shared=true)
 #Pkg.develop(path=".")
 #Pkg.add(["CUDA", "cuDNN", "Flux"])
 
-using ChainStorm, ChainStorm.Flowfusion, ChainStorm.ProteinChains
+using ChainStorm, Flowfusion, ChainStorm.ProteinChains
 using CUDA, Flux
 
 model = load_model() |> gpu;
 
 struc = pdb"7RBY"1[1:1];
-target_length = length(struc[1]);
 batch_target = ChainStorm.pdb2batch(struc);
+X0 = compound_state(batch_target)
 
-@time recorded, rev_g = flow_quickgen(
-    ChainStorm.P, batch_target, ChainStorm.compound_state(batch_target), model;
-    is_reverse = true, d = gpu, steps = 0f0:0.001f0:1f0, snap_time = 0.9f0);
+phases = [
+    Phase(1.0 => 0.0),
+    Phase(0.0 => 1.0, use_record=true, new_lengths=[100, 120]),
+    Phase(1.0 => 0.5, record_dim=195),
+    Phase(0.5 => 1.0, use_record=true),
+    Phase(1.0 => 0.75, record_dim=195),
+    Phase(0.75 => 1.0, use_record=true),
+]
 
-#=new_lengths = [122, 114]
-batch = dummy_batch([ChainStorm.lengths_from_chainids(batch_target.chainids); new_lengths])
-batch.resinds .= [batch_target.resinds; 1:new_lengths[1]; 1:new_lengths[2]]
-X₀ = ChainStorm.zero_state(batch)=#
+out = flex_quickgen(P, batch_target, X0, model; d=gpu);
 
-tracker = ChainStorm.Tracker()
-@time fwd_g = flow_quickgen(
-    ChainStorm.P, batch_target, rev_g, model;
-    tracker, d = gpu, steps = 0f0:0.001f0:1f0);
-
-id = join(ChainStorm.lengths_from_chainids(batch_target.chainids),'_')*"-"*join(rand('A':'Z', 4))
-
-export_pdb("$(id)_bind.pdb", fwd_g, batch_target.chainids, batch_target.resinds) #<- Save PDB
+dir = "movie"
+isdir(dir) || mkdir(dir)
+frame_index = 0; for (i, (phase, (X1, b, tracker))) in enumerate(zip(phases, out))
+    for (j, Xₜ) in enumerate(tracker.xt)
+        frame_index += 1
+        export_pdb(
+            start, stop = phase.interval,
+            "$dir/$frame_index-$i-$j-$start-$stop.pdb",
+            Xₜ, b.chainids, b.resinds)
+    end
+end

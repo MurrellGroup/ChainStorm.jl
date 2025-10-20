@@ -1,15 +1,17 @@
 using Flowfusion:
     resolveprediction, mask, step,
-    tensor, UProcess, UState, unhot
+    tensor, UProcess, UState, unhot,
+    selectlastdim, lastsize
 
 function reverse_gen(
     P::Tuple{Vararg{UProcess}}, X₀::Tuple{Vararg{UState}},
     model, steps::AbstractVector, record;
-    #recdim = Flowfusion.lastsize(X₀, offset=1),
+    recdim = nothing,
     tracker = Returns(nothing),
     midpoint = false,
     snap_time = 0,
 )
+    recdim = isnothing(recdim) ? lastsize(X₀, offset=1) : recdim
     Xₜ = copy.(X₀)
     push!(record, (1, X₀, nothing))
     for (s₁, s₂) in zip(steps, steps[begin+1:end])
@@ -26,14 +28,14 @@ function reverse_gen(
             tensor(fakeX̂₁[2]) .= tensor(X₀[2])
             push!(record, (
                 1-s₂,
-                deepcopy(Xₜ),# 1:recdim, offset=1),
-                fakeX̂₁#, 1:recdim, offset=1)
+                selectlastdim(deepcopy(Xₜ), 1:recdim, offset=1),
+                selectlastdim(fakeX̂₁, 1:recdim, offset=1)
             ))
         else
             push!(record, (
                 1-s₂,
-                deepcopy(Xₜ),# 1:recdim, offset=1),
-                deepcopy(X̂₁)#, 1:recdim, offset=1)
+                selectlastdim(deepcopy(Xₜ), 1:recdim, offset=1),
+                selectlastdim(deepcopy(X̂₁), 1:recdim, offset=1)
             ))
         end
         tracker(1-t, Xₜ, X̂₁)
