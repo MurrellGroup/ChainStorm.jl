@@ -1,13 +1,46 @@
 module ChainStorm
 
-using Flowfusion, ForwardBackward, Flux, RandomFeatureMaps, Onion, InvariantPointAttention, BatchedTransformations, ProteinChains, DLProteinFormats, HuggingFaceApi, JLD2
+using Flowfusion
+using ForwardBackward
+using Flux
+using RandomFeatureMaps
+using Onion
+using InvariantPointAttention
+using BatchedTransformations
+using ProteinChains
+using DLProteinFormats
+using HuggingFaceApi
+using JLD2
 
+include("reverse.jl")
 include("flow.jl")
 include("model.jl")
 
 function load_model(; checkpoint = "ChainStormV1.jld2")
     file = hf_hub_download("MurrellLab/ChainStorm", checkpoint)
     return Flux.loadmodel!(ChainStormV1(), JLD2.load(file, "model_state"))
+end
+
+function pdb2batch(struc::ProteinChains.ProteinStructure)
+    struc.cluster = 1
+    return DLProteinFormats.batch_flatrecs([DLProteinFormats.flatten(struc),])
+end
+
+function lengths_from_chainids(chainids)
+    counts = Int[]  # Initialize an empty array to store counts
+    current_count = 1
+
+    for i in 2:length(chainids)
+        if chainids[i] == chainids[i - 1]
+            current_count += 1
+        else
+            push!(counts, current_count)
+            current_count = 1
+        end
+    end
+
+    push!(counts, current_count)
+    return counts
 end
 
 chainids_from_lengths(lengths) = vcat([repeat([i],l) for (i,l) in enumerate(lengths)]...)
