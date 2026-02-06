@@ -23,7 +23,9 @@ function ChainStormV1(dim::Int = 384, depth::Int = 6, f_depth::Int = 6)
     )
     return ChainStormV1(layers)
 end
-function (fc::ChainStormV1)(t, Xt, chainids, resinds; sc_frames = nothing)
+
+#function (fc::ChainStormV1)(t, Xt, chainids, resinds; sc_frames = nothing)
+function (fc::ChainStormV1)(t, Xt, aas, chainids, resinds; sc_frames = nothing)
     l = fc.layers
     pmask = Flux.Zygote.@ignore self_att_padding_mask(Xt[1].lmask)
     pre_z = Flux.Zygote.@ignore l.pair_rff(pair_encode(resinds, chainids))
@@ -31,7 +33,9 @@ function (fc::ChainStormV1)(t, Xt, chainids, resinds; sc_frames = nothing)
     t_rff = Flux.Zygote.@ignore l.t_rff(t)
     cond = reshape(l.cond_t_encoding(t_rff), :, 1, size(t,2))
     frames = Translation(tensor(Xt[1])) ∘ Rotation(tensor(Xt[2]))
-    AA_one_hots = tensor(Xt[3])
+    AA_one_hots = tensor(Flux.onehotbatch(aas, 1:21))
+    #AA_one_hots = tensor(Xt[3])
+
     x = l.AAencoder(AA_one_hots .+ 0)
     for i in 1:l.depth
         if sc_frames !== nothing
@@ -44,6 +48,7 @@ function (fc::ChainStormV1)(t, Xt, chainids, resinds; sc_frames = nothing)
             frames = l.framemovers[i - l.depth + l.f_depth](frames, x, t = t)
         end
     end
-    aa_logits = l.AAdecoder(x .+ reshape(l.AApre_t_encoding(t_rff), :, 1, size(t,2)))   
-    return frames, aa_logits
+    #aa_logits = l.AAdecoder(x .+ reshape(l.AApre_t_encoding(t_rff), :, 1, size(t,2)))   
+    #return frames, aa_logits
+    return frames
 end
